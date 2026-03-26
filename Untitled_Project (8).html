@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" class=""><head><script>window.livecodes = window.livecodes || {};</script><title>Untitled Project</title><meta name="title" content="Untitled Project"><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0"><style id="__livecodes_styles__"></style><script src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.js" async=""></script><script type="importmap">{
+  "imports": {}
+}</script></head><body>
+
+
+    <meta charset="UTF-8">
+    <title>th3 sl33p 0v3r: Ethos</title>
+    <style>
+        body { margin: 0; background: black; color: white; font-family: 'Courier New', monospace; overflow: hidden; }
+        #game-container { position: relative; width: 100vw; height: 100vh; background-size: cover; background-position: center; }
+        #story { padding: 40px; max-width: 650px; margin: 5% auto; background: rgba(0,0,0,0.95); border: 2px solid #600; border-radius: 12px; position: relative; z-index: 10; box-shadow: 0 0 30px #600; }
+        h1 { color: #f00; text-shadow: 3px 3px black; margin-top: 0; letter-spacing: 4px; }
+        button { display: block; width: 100%; margin: 12px 0; padding: 15px; background: #1a0000; color: #ddd; border: 1px solid #400; cursor: pointer; text-align: left; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #800; color: white; border-color: #f00; padding-left: 25px; }
+        #chase { display: none; width: 600px; height: 600px; margin: 20px auto; position: relative; background: #080808; border: 4px solid #300; }
+        .wall { position: absolute; background: #1a1a1a; border: 1px solid #333; box-sizing: border-box; }
+        #player { width: 16px; height: 16px; background: #0ff; position: absolute; z-index: 10; transition: box-shadow 0.2s; }
+        #mia { width: 22px; height: 22px; background: #f00; position: absolute; z-index: 9; border-radius: 50%; box-shadow: 0 0 20px #f00; }
+        #exit { width: 40px; height: 40px; background: #0f0; position: absolute; bottom: 0; left: 0; color: black; font-weight: bold; display: flex; align-items: center; justify-content: center; font-size: 10px; z-index: 5; }
+        #hud { position: absolute; top: 10px; left: 20px; font-size: 12px; color: #800; line-height: 1.5; }
+    </style>
+
+
+
+<div id="game-container">
+    <div id="hud">
+        SANITY: <span id="sanity-val">100%</span><br>
+        INV: <span id="inv-list">Empty</span><br>
+        <span id="stealth-msg" style="color:#0ff"></span>
+    </div>
+    <div id="story">
+        <h1 id="title">th3 sl33p 0v3r</h1>
+        <div id="text"></div>
+        <div id="choices"></div>
+    </div>
+    <div id="chase">
+        <div id="player"></div>
+        <div id="mia"></div>
+        <div id="exit">EXIT</div>
+    </div>
+</div>
+
+<script>
+let state = { 
+    inventory: [], 
+    sanity: 100, 
+    evidenceFound: 0,
+    isHiding: false 
+};
+
+const scenes = {
+    1: { 
+        text: "The driveway is empty. Mia's front door hangs slightly ajar. A heavy smell of copper drifts from the shed.", 
+        choices: [{t:"Enter the house", n:2}, {t:"Search the shed", n:"shed"}] 
+    },
+    "shed": { 
+        text: "Inside the shed, you find a rusted Wrench and a bloody polaroid of your own car.", 
+        onEnter: () => { addItem("Wrench"); addItem("Photo"); }, 
+        choices: [{t:"Head to the foyer", n:2}] 
+    },
+    2: { 
+        text: "The foyer is pitch black. You see the Kitchen, the Basement, and a ladder to the Attic. Shadows seem to move in the Living Room.", 
+        choices: [
+            {t:"Kitchen", n:5}, {t:"Basement", n:10}, {t:"Attic", n:"attic"}, 
+            {t:"Living Room", n:"living_room"}
+        ] 
+    },
+    "attic": { 
+        text: "The floorboards groan. You find a Flashlight and a diary entry: 'Mia isn't Mia anymore.'", 
+        onEnter: () => { addItem("Flashlight"); state.evidenceFound++; }, 
+        choices: [{t:"Go back down", n:2}] 
+    },
+    "living_room": {
+        text: "A TV flickers with static. You find a 'Missing Persons' report with your name on it.",
+        onEnter: () => { state.evidenceFound++; state.sanity -= 20; updateHUD(); },
+        choices: [{t:"Hide behind the couch", n:"hide_choice"}, {t:"Run to Foyer", n:2}]
+    },
+    "hide_choice": {
+        text: "You hold your breath. Mia walks past, her footsteps sounding like breaking glass. She leaves a key behind.",
+        onEnter: () => { addItem("House Key"); },
+        choices: [{t:"Take key and leave", n:2}]
+    },
+    5: { text: "The fridge is leaking. A note is pinned with a steak knife: 'YOU'RE NEXT.'", choices: [{t:"Open fridge", n:"chase"}, {t:"Run Upstairs", n:4}] },
+    10: { text: "Mia stands in the corner, facing the wall. She is humming a song you don't recognize.", choices: [{t:"Touch her", n:"chase"}, {t:"Back away", n:2}] },
+    4: { text: "Your friends are bound in the bedroom. Mia stands by the window, clutching a knife.", choices: [
+        {t: "Fight back (Wrench required)", n: "fight", req: "Wrench"},
+        {t: "Jump out (Flip of Fate)", n: "window_flip"},
+        {t: "Try to talk to her", n: "game_over"}
+    ]},
+    "window_flip": { 
+        text: "You leap through the glass! The Flip of Fate decides your fall...", 
+        onEnter: () => { 
+            setTimeout(() => {
+                if (Math.random() > 0.4) renderScene("garden");
+                else { alert("You landed badly."); renderScene("chase"); }
+            }, 1500);
+        }, 
+        choices: [] 
+    },
+    "garden": {
+        text: "You land in the mud. The back gate is locked. You need the House Key.",
+        choices: [{t: "Use Key on Gate", n: "win", req: "House Key"}, {t: "Climb the fence", n: "chase"}]
+    },
+    "fight": { 
+        text: "You strike her with the wrench. She falls, then dissolves into black smoke. Your friends are safe.", 
+        choices: [{t:"Escape the nightmare", n: (state.evidenceFound >= 2) ? "true_win" : "win"}] 
+    },
+    "true_win": { text: "VICTORY. You found all the evidence and saved everyone. The cycle is broken.", choices: [{t:"Reset", n:1}] },
+    "win": { text: "You escaped, but the police found nothing. You'll always be looking over your shoulder.", choices: [{t:"Reset", n:1}] },
+    "game_over": { text: "She wasn't listening. GAME OVER.", choices: [{t:"Try Again", n:1}] }
+};
+
+// MAZE DATA (1=Wall)
+const mazeMap = [
+    [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+    [1,0,0,0,1,0,0,0,0,0,0,0,0,0,1],
+    [1,0,1,0,1,0,1,1,1,1,1,0,1,0,1],
+    [1,0,1,0,0,0,0,0,0,0,1,0,1,0,1],
+    [1,1,1,0,1,1,1,0,1,0,1,0,0,0,1],
+    [1,0,0,0,0,0,1,0,1,0,1,1,1,1,1],
+    [1,0,1,1,1,0,1,0,1,0,0,0,0,0,1],
+    [1,0,0,0,1,0,0,0,1,1,1,1,1,0,1],
+    [1,1,1,0,1,1,1,0,0,0,0,0,1,0,1],
+    [1,0,0,0,0,0,1,1,1,1,1,0,1,0,1],
+    [1,0,1,1,1,0,0,0,0,0,1,0,1,0,1],
+    [1,0,0,0,1,1,1,1,1,0,1,0,0,0,1],
+    [1,1,1,0,1,0,0,0,1,0,1,1,1,0,1],
+    [1,0,0,0,0,0,1,0,0,0,0,0,0,0,1],
+    [0,0,1,1,1,1,1,1,1,1,1,1,1,1,1]
+];
+
+let px, py, mx, my, walls = [], keys = {};
+
+function startChase() {
+    document.getElementById("story").style.display = "none";
+    document.getElementById("chase").style.display = "block";
+    walls = [];
+    const chaseDiv = document.getElementById("chase");
+    document.querySelectorAll('.wall').forEach(el => el.remove());
+
+    mazeMap.forEach((row, y) => row.forEach((cell, x) => {
+        if(cell === 1) {
+            let w = document.createElement("div"); w.className = "wall";
+            w.style.width = "40px"; w.style.height = "40px";
+            w.style.left = (x*40)+"px"; w.style.top = (y*40)+"px";
+            chaseDiv.appendChild(w);
+            walls.push({x: x*40, y: y*40, w: 40, h: 40});
+        }
+    }));
+
+    px = 50; py = 50; mx = 520; my = 520;
+    gameLoop();
+}
+
+function gameLoop() {
+    let s = (state.sanity < 50) ? 2.2 : 3.0; // Lower sanity = Slower player
+    let oldX = px, oldY = py;
+
+    // Movement with wall collision
+    if(keys["w"]) py -= s; if(keys["s"]) py += s;
+    if(isColliding(px, py, 16)) py = oldY;
+    if(keys["a"]) px -= s; if(keys["d"]) px += s;
+    if(isColliding(px, py, 16)) px = oldX;
+
+    // Mia's Speed & Wall Collision
+    let mS = 1.3 + (100 - state.sanity) / 100;
+    let oldMx = mx, oldMy = my;
+    if(px > mx) mx += mS; else if(px < mx) mx -= mS;
+    if(isColliding(mx, my, 22)) mx = oldMx;
+    if(py > my) my += mS; else if(py < my) my -= mS;
+    if(isColliding(mx, my, 22)) my = oldMy;
+
+    // Visuals
+    document.getElementById("player").style.left = px+"px";
+    document.getElementById("player").style.top = py+"px";
+    document.getElementById("player").style.boxShadow = state.inventory.includes("Flashlight") ? "0 0 15px #0ff" : "none";
+    document.getElementById("mia").style.left = mx+"px";
+    document.getElementById("mia").style.top = my+"px";
+
+    if(px < 40 && py > 540) renderScene("win");
+    else if(Math.hypot(px-mx, py-my) < 18) { alert("SHE FOUND YOU."); location.reload(); }
+    else if(document.getElementById("chase").style.display === "block") requestAnimationFrame(gameLoop);
+}
+
+function isColliding(nx, ny, sz) { 
+    return walls.some(w => nx < w.x+w.w && nx+sz > w.x && ny < w.y+w.h && ny+sz > w.y); 
+}
+
+function addItem(item) { if(!state.inventory.includes(item)) state.inventory.push(item); updateHUD(); }
+
+function updateHUD() {
+    document.getElementById("sanity-val").innerText = state.sanity + "%";
+    document.getElementById("inv-list").innerText = state.inventory.join(", ") || "Empty";
+}
+
+function renderScene(id) {
+    if(id === "chase") return startChase();
+    const sc = scenes[id];
+    if(sc.onEnter) sc.onEnter();
+    document.getElementById("story").style.display = "block";
+    document.getElementById("chase").style.display = "none";
+    document.getElementById("text").innerText = sc.text;
+    const cb = document.getElementById("choices"); cb.innerHTML = "";
+    sc.choices.forEach(c => {
+        if(c.req && !state.inventory.includes(c.req)) return;
+        let b = document.createElement("button"); b.innerText = c.t;
+        b.onclick = () => renderScene(c.n); cb.appendChild(b);
+    });
+}
+
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+renderScene(1);
+</script>
+
+
+<script></script></body></html>
